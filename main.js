@@ -1,8 +1,9 @@
 
 function copyTriger() {
-	//let valueOfPrevPurchaseManagement = getPrevPurchaseManagementSheet();
+	getPrevPurchaseManagementSheet();
 	let extractedData = calculateCurrentPurchaseAmount();
-	formateData(extractedData);
+	let currentPurchaseData = formateData(extractedData);
+	exportCurrentPurchaseData(currentPurchaseData);
 }
 
 //過去の台帳の保持
@@ -10,14 +11,15 @@ function getPrevPurchaseManagementSheet() {
 	const ss = SpreadsheetApp.openById('1XfB8xfJMUERp3WIskVrJBiReeAZ3mUuIztDKlbCPKyM');
 	const purchaseManagementSheet = getPurchaseManagementSheet();
 	purchaseManagementSheet.copyTo(ss);
-	return purchaseManagementSheet.getDataRange().getValues();
 }
 
 //当月分の書き込み情報を計算
 //カスタムIDと種別と勘定科目が一致したものを合計する
 function calculateCurrentPurchaseAmount() {
-	const valueOfByItemList = getByItemList().getDataRange().getValues();
-	let deleteRows = [];
+	const byItemList = getByItemList()
+	let valueOfByItemList = byItemList.getDataRange().getValues();
+	let deleteRows = [],
+		tmp = 0;
 
 	for (let c = 2; valueOfByItemList.length > c; c++) {
 		//i=2の時に[i][6]が空だった場合のエラーを拾うスクリプトを実装する
@@ -42,12 +44,16 @@ function calculateCurrentPurchaseAmount() {
 			self.splice(deleteRows[j] - j, 1);
 		}
 		deleteRows = [];
+	});
+
+	extractedData.forEach((arr, i, self) => {
+		tmp += self[i][4];
 	})
 
+	byItemList.getRange(1, 6).setValue(tmp);
 	return extractedData;
 }
 
-//
 function extractData(valueOfByItemList) {
 	let tmp = [],
 		extractedData = [];
@@ -69,10 +75,6 @@ function extractData(valueOfByItemList) {
 	return extractedData
 }
 
-
-
-
-
 //過去分の台帳と突合し、情報がある人間の金額を追加
 //仕入れ管理表側の下準備
 function formateData(extractedData) {
@@ -80,20 +82,17 @@ function formateData(extractedData) {
 		configSheet = getConfigSheet();
 
 	let creationMounth = configSheet.getRange('B7'),
-		deleteRows = [];
+		deleteRows = [],
+		valueOfPurchaseManagement = purchaseManagementSheet.getDataRange().getValues();
 
-	let valueOfPurchaseManagement = purchaseManagementSheet.getDataRange().getValues();
-
-	valueOfPurchaseManagement.forEach((arr, i, self) => {
-		extractedData.forEach((arr2, i2, self2) => {
+	valueOfPurchaseManagement.forEach((arr, i) => {
+		extractedData.forEach((arr2, i2) => {
 			if (valueOfPurchaseManagement[i][5] === extractedData[i2][1] && valueOfPurchaseManagement[i][7] === extractedData[i2][2] && valueOfPurchaseManagement[i][8] === extractedData[i2][3]) {
 				valueOfPurchaseManagement[i][15] = extractedData[i2][4];
 				deleteRows.push(i2);
 			}
 		})
 	})
-
-	//purchaseManagementSheet.getRange(1, 1, valueOfPurchaseManagement.length, 37).setValues(valueOfPurchaseManagement);
 
 	deleteRows.sort((a, b) => {
 		return (a < b ? -1 : 1);
@@ -105,15 +104,13 @@ function formateData(extractedData) {
 		extractedData.splice(deleteRows[i] - i, 1)
 	}
 
-
-
-	exportToAddLedger(extractedData);
+	valueOfPurchaseManagement = mergeValueOfPurchaseListToExtractedData(extractedData);
+	return valueOfPurchaseManagement;
 }
 
 
-
 //新規追加者を仕入れ管理表配列に挿入する
-function exportToAddLedger(extractedData) {
+function mergeValueOfPurchaseListToExtractedData(extractedData) {
 	const purchaseManagementSheet = getPurchaseManagementSheet();
 	let valueOfPurchaseManagement = purchaseManagementSheet.getDataRange().getValues();
 	let lastRow = 1;
@@ -127,28 +124,28 @@ function exportToAddLedger(extractedData) {
 		}
 	})
 
-	let insertData = shapeInsertData(extractedData);
+	let insertData = shapeInsertData(extractedData, lastRow);
 
 	//台帳配列に新規追加者を挿入する
-	insertData.forEach((arr, i, self) => {
+	insertData.forEach(arr => {
 		valueOfPurchaseManagement.splice(lastRow, 0, arr);
 	})
-	Logger.log(valueOfPurchaseManagement);
+
+	return valueOfPurchaseManagement;
 }
 
 //spliceで挿入するデータの整形
-function shapeInsertData(extractedData) {
-	let tmp = [];
-	let insertData = [];
+function shapeInsertData(extractedData, lastRow) {
+	let tmp = [],
+		insertData = [];
 
 	//A列~D列及びK列からX列は後ほど修正
 	//媒体と作成月により動的に変更しなければいけない。
 	extractedData.forEach((value, i, self) => {
 		let supplierName = findSupplierName(value);
-		Logger.log(supplierName)
 
 		tmp.push(' ');//A列
-		tmp.push('SM7');//B列
+		tmp.push(`SM${lastRow}`);//B列
 		tmp.push(' ');//C列
 		tmp.push('32');//D列
 		tmp.push('lifehacker');//E列
@@ -169,10 +166,11 @@ function shapeInsertData(extractedData) {
 		tmp.push(' ');//T列
 		tmp.push(' ');//U列
 		tmp.push(' ');//V列
-		tmp.push('=sum(k8:v8) ')//W列
+		tmp.push(0)//W列
 		tmp.push(false);//X列
 		insertData.push(tmp);
 		tmp = [];
+		lastRow++;
 	})
 	return insertData;
 }
@@ -180,7 +178,7 @@ function shapeInsertData(extractedData) {
 //名前が空欄であるので仕入れ台帳と仕入先codeで突合し、名前を入力
 function findSupplierName(value) {
 	let ValueOfSupplierLedgerSheet = getSupplierLedgerSheet().getDataRange().getValues(),
-	supplierName;
+		supplierName;
 
 	ValueOfSupplierLedgerSheet.some((value2, i2, self2) => {
 		if (value[1] === self2[i2][0]) {
@@ -191,12 +189,132 @@ function findSupplierName(value) {
 	return supplierName
 }
 
-
 //台帳に貼り付ける前に消去するスクリプトが必要
 //特定箇所を関数に変更するための処理
 //台帳に貼り付け
+function exportCurrentPurchaseData(currentPurchaseData) {
+	const purchaseManagementSheet = getPurchaseManagementSheet();
+	const obj = processCurrentPurchaseData(currentPurchaseData);
+	let ledgerArr = obj.ledgerArr;
+	let ensureArr = obj.ensureArr;
+
+	ledgerArr = initLedgerArr(ledgerArr);
+	ensureArr = initEnsureArr(ensureArr);
+
+	purchaseManagementSheet.clear();
+	purchaseManagementSheet.getRange(1, 1, ledgerArr.length, 24).setValues(ledgerArr);
+	purchaseManagementSheet.getRange(ledgerArr.length + 1, 1, ensureArr.length, 24).setValues(ensureArr);
+
+	insertCheckBox(purchaseManagementSheet, ledgerArr);
+
+}
+
+//確認用エリアと台帳エリアを分離し、加工用の関数に渡す
+function processCurrentPurchaseData(currentPurchaseData) {
+	let lastRow = 1,
+		ledgerArr,
+		ensureArr;
+
+	//台帳最終行の判別にSMを使用しているが動的に取得できるように変更する必要がある。
+	currentPurchaseData.forEach(value => {
+		if (typeof value[1] === 'string') {
+			if (value[1].indexOf('SM') >= 0) {
+				lastRow++;
+			}
+		}
+	});
+
+	ledgerArr = currentPurchaseData.slice(0, lastRow + 1);
+	ensureArr = currentPurchaseData.slice(lastRow + 1);
+
+	const obj = {
+		'ledgerArr': ledgerArr,
+		'ensureArr': ensureArr
+	}
+
+	return obj;
+}
+
+//台帳に記入する前に仕入先codeの昇順にし、スプレッドシート関数を加える
+function initLedgerArr(ledgerArr) {
+	const purchaseManagementSheet = getPurchaseManagementSheet();
+	let lastRowIndex = ledgerArr.length - 1,
+		startRangeByMouth,
+		endRangeByMouth,
+		startRangeByPerson,
+		endRangeByPerson;
+
+	ledgerArr = sortCustomId(ledgerArr);
+
+	ledgerArr[lastRowIndex].forEach((value, i, self) => {
+		if (typeof value == 'number') {
+			startRangeByMouth = purchaseManagementSheet.getRange(2, i + 1).getA1Notation();
+			endRangeByMouth = purchaseManagementSheet.getRange(ledgerArr.length - 1, i + 1).getA1Notation();
+			self[i] = `=sum(${startRangeByMouth}:${endRangeByMouth})`;
+		}
+	});
+
+	ledgerArr.forEach((value, i, self) => {
+		if (typeof value[22] == 'number') {
+			startRangeByPerson = purchaseManagementSheet.getRange(i + 1, 11).getA1Notation();
+			endRangeByPerson = purchaseManagementSheet.getRange(i + 1, 22).getA1Notation();
+			self[i][22] = `=sum(${startRangeByPerson}:${endRangeByPerson})`;
+		}
+	});
+
+	Logger.log(ledgerArr);
+
+	ledgerArr.forEach((arr, i, self) => {
+		if (self[i][23] == true) {
+			self[i][23] = false;
+		}
+	})
+
+	return ledgerArr;
+}
+
+//先頭行と最終行を除いた台帳エリアデータに対し、仕入先codeの昇順ソートを行う
+function sortCustomId(ledgerArr) {
+	const header = ledgerArr[0];
+	const footer = ledgerArr[ledgerArr.length - 1];
+	ledgerArr.shift();
+	ledgerArr.pop();
+
+	ledgerArr.sort((a, b) => {
+		return (a[5] < b[5] ? -1 : 1);
+	})
+
+	ledgerArr.unshift(header);
+	ledgerArr.push(footer);
+
+	return ledgerArr;
+}
 
 
+//ensureArrの位置は固定のはずだから
+function initEnsureArr(ensureArr) {
+	let totalFeeByItemList = getByItemList().getRange(1, 6).getValue();
+
+	ensureArr.forEach((arr, i, self) => {
+		if (typeof self[i][3] == 'string') {
+			if (self[i][3].indexOf('8') === 0) {
+				self[i][4] = `=sum(P2:P8)`;
+				self[i][5] = totalFeeByItemList;
+			}
+		}
+	})
+
+	return ensureArr;
+}
+
+function insertCheckBox(purchaseManagementSheet, ledgerArr) {
+	let startCell = purchaseManagementSheet.getRange(2,24).getA1Notation(),
+	endCell       = purchaseManagementSheet.getRange(ledgerArr.length - 1, 24).getA1Notation();
+
+	Logger.log(`${startCell}:${endCell}`);
+	purchaseManagementSheet.getRange(`${startCell}:${endCell}`).insertCheckboxes();
+
+}
 
 
 
