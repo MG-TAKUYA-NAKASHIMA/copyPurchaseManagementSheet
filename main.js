@@ -6,6 +6,13 @@ function copyTriger() {
 	exportCurrentPurchaseData(currentPurchaseData);
 }
 
+function deleteTriger() {
+	const byItemList = getByItemList();
+	let lastRow = byItemList.getLastRow();
+	byItemList.getRange(3,1,lastRow,43).clear();
+	byItemList.getRange(1,6).clearContent();
+}
+
 //過去の台帳の保持
 function getPrevPurchaseManagementSheet() {
 	const ss = SpreadsheetApp.openById('1XfB8xfJMUERp3WIskVrJBiReeAZ3mUuIztDKlbCPKyM');
@@ -22,10 +29,14 @@ function calculateCurrentPurchaseAmount() {
 		tmp = 0;
 
 	for (let c = 2; valueOfByItemList.length > c; c++) {
-		//i=2の時に[i][6]が空だった場合のエラーを拾うスクリプトを実装する
-
-		if (valueOfByItemList[c][6] === '') {
+		if (valueOfByItemList[c][4] === '-' && valueOfByItemList[c][6] === '') {
 			valueOfByItemList[c][6] = valueOfByItemList[c - 1][6];
+		} else if (typeof valueOfByItemList[c][4] == 'number' && valueOfByItemList[c][6] === '') {
+			valueOfByItemList[c][6] = '勘定科目未入力';
+		}
+
+		if (valueOfByItemList[c][4] !== '-') {
+			byItemList.getRange(c + 1, 7).setBackground('yellow');
 		}
 	}
 
@@ -33,7 +44,7 @@ function calculateCurrentPurchaseAmount() {
 
 	extractedData.forEach((value, i, self) => {
 		self.forEach((value2, i2) => {
-			if (i !== i2 && self[i][1] === value2[1] && self[i][2] === value2[2] && self[i][3] === value2[3] && self[i2][4] > 0) {
+			if (i !== i2 && self[i][1] === value2[1] && self[i][2] === value2[2] && self[i][3] === value2[3]) {
 				self[i][4] += value2[4];
 				deleteRows.push(i2);
 			}
@@ -50,8 +61,22 @@ function calculateCurrentPurchaseAmount() {
 		tmp += self[i][4];
 	})
 
-	byItemList.getRange(1, 6).setValue(tmp);
+	//F1セルに合計金額を記載
+	sumToalAmount();
+
 	return extractedData;
+}
+
+
+function sumToalAmount() {
+	const byItemList = getByItemList()
+	let valueOfByItemList = byItemList.getDataRange().getValues(),
+	tmp = 0;
+	
+	for(let i = 2; valueOfByItemList.length > i; i++){
+		tmp += valueOfByItemList[i][10];
+	}
+	byItemList.getRange('F1').setValue(tmp);
 }
 
 
@@ -60,25 +85,26 @@ function calculateCurrentPurchaseAmount() {
 function extractData(valueOfByItemList) {
 	let tmp = [],
 		extractedData = [];
+		valueOfByItemList.shift();
+  	valueOfByItemList.shift();
 
-	valueOfByItemList.forEach((arr, i, self) => {
+		valueOfByItemList.forEach((arr, i, self) => {
 
 		//源泉分を弾く
-		if (self[i][10] > 0) {
+		if (self[i][5] !== '源泉徴収税') {
+      if(self[i][5] !== '源泉所得税（経費）'){
 			tmp.push(self[i][12]);
 			tmp.push(self[i][13]);
 			tmp.push(self[i][42]);
 			tmp.push(self[i][6]);
-			tmp.push(self[i][10]);
+			tmp.push(Number(self[i][10]));
 			extractedData.push(tmp);
 			tmp = [];
+      }
 		}
 	});
-
 	return extractedData
 }
-
-
 
 
 //過去分の台帳と突合し、情報がある人間の金額を追加
@@ -127,7 +153,7 @@ function formateData(extractedData) {
 //新規追加者を仕入れ管理表配列に挿入する
 function mergeValueOfPurchaseListToExtractedData(extractedData, valueOfPurchaseManagement) {
 	const configSheet = getConfigSheet(),
-	stockingCode = configSheet.getRange('C4').getValue();
+		stockingCode = configSheet.getRange('C4').getValue();
 	let lastRow = 1;
 
 	valueOfPurchaseManagement.forEach(value => {
@@ -151,15 +177,20 @@ function mergeValueOfPurchaseListToExtractedData(extractedData, valueOfPurchaseM
 //spliceで挿入するデータの整形
 function shapeInsertData(extractedData, lastRow) {
 	const configSheet = getConfigSheet(),
-	stockingCode = configSheet.getRange('C4').getValue(),
-	mediaName    = configSheet.getRange('C5').getValue(),
-	mediaCode    = configSheet.getRange('C6').getValue();
+		stockingCode = configSheet.getRange('C4').getValue(),
+		mediaName = configSheet.getRange('C5').getValue(),
+		mediaCode = configSheet.getRange('C6').getValue();
 	let tmp = [],
-		insertData = [];
-	
+		insertData = [],
+		creationMounth = configSheet.getRange('C3').getValue(),
+		creationMouthPoint;
+			//作成月が1月2月の時の調整
+	if (creationMounth <= 1) {
+		creationMouthPoint = creationMounth + 19;
+	} else if (creationMounth > 2) {
+		creationMouthPoint = creationMounth + 7;
+	}
 
-	//A列~D列及びK列からX列は後ほど修正
-	//媒体と作成月により動的に変更しなければいけない。
 	extractedData.forEach((value, i, self) => {
 		let supplierName = findSupplierName(value);
 
@@ -178,7 +209,7 @@ function shapeInsertData(extractedData, lastRow) {
 		tmp.push(' ');//M列
 		tmp.push(' ');//N列
 		tmp.push(' ');//O列
-		tmp.push(self[i][4]);//P列金額
+		tmp.push(' ');//P列
 		tmp.push(' ');//Q列
 		tmp.push(' ');//R列
 		tmp.push(' ');//S列
@@ -186,7 +217,8 @@ function shapeInsertData(extractedData, lastRow) {
 		tmp.push(' ');//U列
 		tmp.push(' ');//V列
 		tmp.push(0)//W列
-		tmp.push(false);//X列
+		tmp.push(' ');//X列
+		tmp[creationMouthPoint] = extractedData[i][4];
 		insertData.push(tmp);
 		tmp = [];
 		lastRow++;
@@ -231,7 +263,7 @@ function exportCurrentPurchaseData(currentPurchaseData) {
 //確認用エリアと台帳エリアを分離し、加工用の関数に渡す
 function processCurrentPurchaseData(currentPurchaseData) {
 	const configSheet = getConfigSheet(),
-	stockingCode = configSheet.getRange('C4').getValue();
+		stockingCode = configSheet.getRange('C4').getValue();
 	let lastRow = 1,
 		ledgerArr,
 		ensureArr;
@@ -283,11 +315,6 @@ function initLedgerArr(ledgerArr) {
 		}
 	});
 
-	ledgerArr.forEach((arr, i, self) => {
-		if (self[i][23] == true) {
-			self[i][23] = false;
-		}
-	})
 
 	return ledgerArr;
 }
@@ -295,9 +322,9 @@ function initLedgerArr(ledgerArr) {
 //先頭行と最終行を除いた台帳エリアデータに対し、仕入先codeの昇順ソートを行う
 function sortCustomId(ledgerArr) {
 	const header = ledgerArr[0],
-	footer = ledgerArr[ledgerArr.length - 1],
-	configSheet = getConfigSheet(),
-	stockingCode = configSheet.getRange('C4').getValue();
+		footer = ledgerArr[ledgerArr.length - 1],
+		configSheet = getConfigSheet(),
+		stockingCode = configSheet.getRange('C4').getValue();
 
 	ledgerArr.shift();
 	ledgerArr.pop();
@@ -320,18 +347,18 @@ function sortCustomId(ledgerArr) {
 //確認用エリアの初期化処理、スプレッドシート関数を追加する
 function initEnsureArr(ensureArr, ledgerArr) {
 	let totalFeeByItemList = getByItemList().getRange(1, 6).getValue(),
-		lastRowInLedgerArr = ledgerArr.length - 1,
+		lastRowInLedgerArr = ledgerArr.length + 1,
 		configSheet = getConfigSheet();
-		creationMounth = configSheet.getRange('C3').getValue(),
+	creationMounth = configSheet.getRange('C3').getValue(),
 
-	ensureArr.forEach((arr, i, self) => {
-		if (typeof self[i][3] == 'string') {
-			if (self[i][3].indexOf(creationMounth) === 0) {
-				self[i][4] = `=sum(P2:P${lastRowInLedgerArr})`;
-				self[i][5] = totalFeeByItemList;
+		ensureArr.forEach((arr, i, self) => {
+			if (typeof self[i][2] == 'string') {
+				if (self[i][1].indexOf(creationMounth) === 0) {
+					self[i][6] = `=sum(C${lastRowInLedgerArr + i}:F${lastRowInLedgerArr + i})`
+					self[i][7] = totalFeeByItemList;
+				}
 			}
-		}
-	})
+		})
 
 	return ensureArr;
 }
@@ -340,18 +367,53 @@ function insertCheckBox(purchaseManagementSheet, ledgerArr) {
 	let startCell = purchaseManagementSheet.getRange(2, 24).getA1Notation(),
 		endCell = purchaseManagementSheet.getRange(ledgerArr.length - 1, 24).getA1Notation();
 
-	purchaseManagementSheet.getRange(`${startCell}:${endCell}`).insertCheckboxes();
+	//purchaseManagementSheet.getRange(`${startCell}:${endCell}`).insertCheckboxes();
 }
 
 function writeBorder(purchaseManagementSheet, ledgerArr, ensureArr) {
 	let lastRowInLedgerArr = ledgerArr.length - 1,
-		lastRowInEnsureArr = ensureArr.length - 1;
+		lastRowInEnsureArr = ensureArr.length - 1,
+		supplierCodeFormats = [],
+		accountFormats = [],
+		totalFormats = [],
+		tmp = [];
+
+	ledgerArr.forEach((arr, i, self) => {
+		if (self[i][8] === '勘定科目未入力') {
+			purchaseManagementSheet.getRange(i + 1, 9).setBackground('#fa8072');
+		}
+	})
+
+	ledgerArr.forEach(value => {
+		supplierCodeFormats.push(['0']);
+
+		for (let w = 0; 13 > w; w++) {
+			tmp.push('#,##');
+		}
+		accountFormats.push(tmp);
+		tmp = [];
+	})
+
+	for (let j = 0; 12 > j; j++) {
+		for (let i = 0; 6 > i; i++) {
+			tmp.push('#,##');
+		}
+		totalFormats.push(tmp);
+		tmp = [];
+	}
+
+	purchaseManagementSheet.getRange(2, 6, lastRowInLedgerArr + 1, 1).setNumberFormats(supplierCodeFormats);
+	purchaseManagementSheet.getRange(2, 11, lastRowInLedgerArr + 1, 13).setNumberFormats(accountFormats);
+	purchaseManagementSheet.getRange(lastRowInLedgerArr + 4, 3, 12, 6).setNumberFormats(totalFormats);
+
 
 	purchaseManagementSheet.getRange(1, 2, 1, 22).setBorder(true, true, true, true, true, null, "black", SpreadsheetApp.BorderStyle.SOLID);
 	purchaseManagementSheet.getRange(2, 2, lastRowInLedgerArr, 22).setBorder(null, null, null, null, true, true, "black", SpreadsheetApp.BorderStyle.DOTTED);
 	purchaseManagementSheet.getRange(2, 2, lastRowInLedgerArr, 22).setBorder(true, true, true, true, null, null, "black", SpreadsheetApp.BorderStyle.SOLID);
 	purchaseManagementSheet.getRange(2, 2, lastRowInLedgerArr, 22).setBorder(true, true, true, true, null, null, "black", SpreadsheetApp.BorderStyle.SOLID);
+	purchaseManagementSheet.getRange(1, 2, 1, 22).setBackground('#87ceeb');
+	purchaseManagementSheet.getRange(lastRowInLedgerArr + 4, 11, 13,13).clear();
 
-	purchaseManagementSheet.getRange(lastRowInLedgerArr + 3, 4, 13, 5).setBorder(true, true, true, true, true, true, "black", SpreadsheetApp.BorderStyle.SOLID);
+	purchaseManagementSheet.getRange(lastRowInLedgerArr + 3, 2, 13, 9).setBorder(true, true, true, true, true, true, "black", SpreadsheetApp.BorderStyle.SOLID);
 
 }
