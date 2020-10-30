@@ -11,7 +11,7 @@ function deleteTriger() {
 	const byItemList = getByItemList();//「請求書（明細別）_{媒体名}」シートを特定
 	let lastRow = byItemList.getLastRow();//「請求書（明細別）_{媒体名}」のシートデータが存在している最終行を取得
 	byItemList.getRange(4,1,lastRow,43).clear();//先頭2行を除いた「請求書（明細別）_{媒体名}」のシートデータを削除
-	byItemList.getRange(2,6).clearContent();//「請求書（明細別）_{媒体名}」シートのF2セルを削除
+	byItemList.getRange(2,6,1,2).clearContent();//「請求書（明細別）_{媒体名}」シートのF2:G2セルを削除
 }
 
 //過去の台帳の保持
@@ -74,8 +74,8 @@ function sumToalAmount() {
 		tmp += valueOfByItemList[i][10];//tmpに金額を足す
 	}
 	byItemList.getRange('F2').setValue(tmp);//「請求書（明細別）_{媒体名}」のF2セルにtmpを出力
+	byItemList.getRange('G2').setValue(`=sum(H2:K2)`);//「請求書（明細別）_{媒体名}」のG2セルにsum関数を出力
 }
-
 
 //「請求書(明細別)_{媒体名}」シートから必要情報のみを取得する
 //extractedData = [請求元名, カスタムID,　種別, 勘定科目, 金額]
