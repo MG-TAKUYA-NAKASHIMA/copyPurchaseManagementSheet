@@ -11,7 +11,7 @@ function deleteTriger() {
 	const byItemList = getByItemList();//「請求書（明細別）_{媒体名}」シートを特定
 	let lastRow = byItemList.getLastRow();//「請求書（明細別）_{媒体名}」のシートデータが存在している最終行を取得
 	byItemList.getRange(4,1,lastRow,43).clear();//先頭2行を除いた「請求書（明細別）_{媒体名}」のシートデータを削除
-	byItemList.getRange(2,6,1,2).clearContent();//「請求書（明細別）_{媒体名}」シートのF2:G2セルを削除
+	byItemList.getRange(2,6,1,6).clearContent();//「請求書（明細別）_{媒体名}」シートのF2:K2セルを削除
 }
 
 //過去の台帳の保持
