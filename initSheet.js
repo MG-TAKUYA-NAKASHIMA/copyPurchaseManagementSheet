@@ -38,8 +38,8 @@ function getArchiveSheet() {
   let ss = SpreadsheetApp.getActiveSpreadsheet(),
     sheets = ss.getSheets(),
     sheetName,
-    match = /【/;
-    let archiveSheets = [];
+    match = /【/,
+    archiveSheets = [];
 
   for (let i = 0; sheets.length > i; i++) {
     sheetName = sheets[i].getName();
