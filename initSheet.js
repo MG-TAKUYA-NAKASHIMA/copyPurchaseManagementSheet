@@ -1,5 +1,14 @@
 function initTriger() {
-  initSheet();
+  popMessage();
+}
+
+function popMessage() {
+  let result = Browser.msgBox("※実行前確認※", '当該スプレッドシートを初期化しますか?', Browser.Buttons.OK_CANCEL);
+  if (result == 'ok') {
+    initSheet();
+  } else if (result == 'cancel') {
+    return;
+  }
 }
 
 function initSheet() {
@@ -23,14 +32,13 @@ function callSheets() {
   arr.push([storeAccountsSheet, 1]);
   arr.push([byItemList, 2]);
   arr.push([purchaseManagementSheet, 3]);
-  arr.push([copiedPurchaseManagementSheet, 3]);
+  arr.push([copiedPurchaseManagementSheet, 4]);
 
-  if(archiveSheets.length > 0) {
-    for(let i = 0; archiveSheets.length > i; i++) {
+  if (archiveSheets.length > 0) {
+    for (let i = 0; archiveSheets.length > i; i++) {
       arr.push([archiveSheets[i], 4])
     }
   }
-
   return arr;
 }
 
@@ -50,8 +58,6 @@ function getArchiveSheet() {
   return archiveSheets;
 }
 
-
-
 function deleteData(sheetObj) {
   switch (sheetObj[1]) {
     case 1:
@@ -59,7 +65,7 @@ function deleteData(sheetObj) {
       break;
     case 2:
       sheetObj[0].getRange(2, 6, 1, 2).clearContent();
-      sheetObj[0].getRange(4, 1, sheetObj[0].getLastRow(), sheetObj[0].getLastColumn()).clearContent();
+      sheetObj[0].getRange(4, 1, sheetObj[0].getLastRow(), sheetObj[0].getLastColumn()).clear();
       break;
     case 3:
       sheetObj[0].getRange(2, 11, sheetObj[0].getLastRow(), 13).clearContent();
@@ -67,10 +73,8 @@ function deleteData(sheetObj) {
       break;
     case 4:
       SpreadsheetApp.getActiveSpreadsheet().deleteSheet(sheetObj[0]);
-      break; 
+      break;
     default:
       break;
   }
-
-
 }

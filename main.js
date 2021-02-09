@@ -278,7 +278,7 @@ function initLedgerArr(ledgerArr) {
 	});
 
 	ledgerArr.forEach((value, i, self) => {
-		if (typeof value[22] == 'number') {
+		if (typeof value[22] !== 'string'  || value[22] == '') {
 			startRangeByPerson = purchaseManagementSheet.getRange(i + 1, 11).getA1Notation();
 			endRangeByPerson = purchaseManagementSheet.getRange(i + 1, 22).getA1Notation();
 			self[i][22] = `=sum(${startRangeByPerson}:${endRangeByPerson})`;
